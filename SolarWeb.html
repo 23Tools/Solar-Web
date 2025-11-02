@@ -1,681 +1,191 @@
-<!-- Save as nova-spotify.html and serve from the Redirect URI you registered at Spotify Dashboard -->
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Nova — Spotify Neon Visualizer</title>
-  <meta name="description" content="Nova Energy — Spotify-connected neon visualizer demo." />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root{
-      --bg:#04060f; --muted:#90a0b8; --accent1:#00e0ff; --accent2:#7c5cff;
-    }
-    *{box-sizing:border-box}
-    body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:#e9f1ff;margin:0;min-height:100vh}
-    .wrap{max-width:1100px;margin:28px auto;padding:22px}
-    .logo-mark{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#041018;background:linear-gradient(135deg,var(--accent1),var(--accent2))}
-    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .glass{background:rgba(255,255,255,0.02);border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,0.04);backdrop-filter:blur(10px);transition:all .22s}
-    .glass:hover{transform:translateY(-6px);box-shadow:0 30px 70px rgba(2,8,20,0.6)}
-    .btn{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));cursor:pointer}
-    .btn-prim{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#041018;font-weight:700;box-shadow:0 10px 30px rgba(124,92,255,0.12)}
-    .now-playing{display:flex;gap:14px;align-items:center}
-    .album{width:120px;height:120px;border-radius:10px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))}
-    .track-meta{min-width:280px}
-    .small{font-size:13px;color:var(--muted)}
-    .neon-line{height:4px;border-radius:999px;background:linear-gradient(90deg,var(--accent1),var(--accent2));background-size:200% 100%;animation:flow 3s linear infinite;margin-top:12px}
-    @keyframes flow{from{background-position:0 0}to{background-position:200% 0}}
-    /* visualizer canvas */
-    #viz{width:100%;height:140px;border-radius:10px;display:block;background:transparent}
-    /* cursor glow */
-    #cursorGlow{position:fixed;top:0;left:0;width:16px;height:16px;border-radius:50%;pointer-events:none;mix-blend-mode:screen;filter:blur(6px);background:radial-gradient(circle,var(--accent1),transparent 40%);transform:translate(-50%,-50%);z-index:9999}
-    /* responsive */
-    @media (max-width:880px){.now-playing{flex-direction:column;align-items:flex-start}.album{width:96px;height:96px}}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nova Energy - Spotify Neon Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* RESET & BASIC STYLES */
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;font-family:'Inter',sans-serif;background:#04060f;color:#fff;overflow:hidden}
+  button{cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-weight:600;margin:4px;transition:all 0.2s}
+  button:hover{transform:translateY(-2px)}
+
+  /* FULL SCREEN VISUALIZER CANVAS */
+  #viz{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
+
+  /* UI LAYER */
+  #ui{position:absolute;z-index:10;top:20px;left:20px;width:350px;background:rgba(255,255,255,0.02);backdrop-filter:blur(12px);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.04)}
+  #ui h1{font-weight:800;font-size:24px;background:linear-gradient(90deg,#00e0ff,#7c5cff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px}
+  #connect{background:linear-gradient(90deg,#00e0ff,#7c5cff);color:#041018;width:100%}
+  #play,#prev,#next{background:rgba(255,255,255,0.08)}
+  #nowPlaying{margin-top:12px;display:flex;gap:12px;align-items:center}
+  #nowPlaying img{width:96px;height:96px;border-radius:12px;object-fit:cover}
+  #trackInfo{flex:1}
+  #track,#artist{margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* NEON PARTICLES */
+  .particle{position:absolute;border-radius:50%;pointer-events:none}
+
+  @media(max-width:400px){
+    #ui{width:90%;top:10px;left:50%;transform:translateX(-50%)}
+    #nowPlaying img{width:72px;height:72px}
+  }
+</style>
 </head>
 <body>
-  <div id="cursorGlow"></div>
 
-  <div class="wrap">
-    <header>
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="logo-mark">N</div>
-        <div>
-          <div style="font-weight:700">Nova <span style="color:var(--accent1)">Energy</span></div>
-          <div class="small">Neon Spotify Visualizer</div>
-        </div>
-      </div>
+<canvas id="viz"></canvas>
 
-      <div style="display:flex;gap:8px;align-items:center">
-        <button id="connectBtn" class="btn btn-prim">Connect Spotify</button>
-        <button id="transferBtn" class="btn">Open Web Playback</button>
-      </div>
-    </header>
-
-    <main style="margin-top:18px">
-      <section class="glass">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div class="small">Now Playing</div>
-            <div style="display:flex;gap:12px;align-items:center;margin-top:8px" class="now-playing">
-              <div class="album" id="albumBox"><img id="albumArt" src="" alt="album" style="width:100%;height:100%;object-fit:cover" /></div>
-              <div class="track-meta">
-                <div id="trackTitle" style="font-size:18px;font-weight:700">Not connected</div>
-                <div id="trackArtist" class="small">Connect Spotify to show track</div>
-
-                <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
-                  <button id="prevBtn" class="btn">⟲</button>
-                  <button id="playBtn" class="btn">▶</button>
-                  <button id="nextBtn" class="btn">⟲→</button>
-                  <div style="flex:1"></div>
-                  <div id="progressTime" class="small">00:00 / 00:00</div>
-                </div>
-
-                <div class="neon-line" id="progressBar" style="width:100%;margin-top:12px"></div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <canvas id="viz"></canvas>
-      </section>
-
-      <div style="height:14px"></div>
-
-      <section style="display:grid;grid-template-columns:1fr 320px;gap:16px">
-        <div class="glass" id="featuresBox">
-          <h3 style="margin-top:0">Features</h3>
-          <ul style="margin:10px 0 0 0;padding:0;list-style:none">
-            <li>• Connect to Spotify using PKCE</li>
-            <li>• Real-time track & album art</li>
-            <li>• Visualizer uses preview audio when available</li>
-            <li>• Falls back to audio features (energy) if preview missing</li>
-            <li>• Play / Pause / Next / Prev via Web API</li>
-          </ul>
-        </div>
-
-        <aside class="glass">
-          <h4 style="margin-top:0">Status</h4>
-          <div id="statusMsg" class="small" style="margin-top:8px">Not connected</div>
-          <div style="height:12px"></div>
-          <div class="small">Instructions</div>
-          <ol style="margin:8px 0 0 16px" class="small">
-            <li>1. Register app & set Redirect URI in Spotify Dashboard</li>
-            <li>2. Paste your <b>Client ID</b> into the code (below)</li>
-            <li>3. Serve this page from that Redirect URI (local server OK)</li>
-            <li>4. Click Connect Spotify and accept permissions</li>
-          </ol>
-        </aside>
-      </section>
-    </main>
-
-    <footer style="margin-top:22px;text-align:center;color:var(--muted)">Nova Energy — Spotify visualizer demo ✦ 2025</footer>
+<div id="ui">
+  <h1>Nova Energy</h1>
+  <button id="connect">Connect Spotify</button>
+  <div style="margin-top:10px;">
+    <button id="prev">⟲</button>
+    <button id="play">▶</button>
+    <button id="next">⟲→</button>
   </div>
+  <div id="nowPlaying">
+    <img id="albumArt" src="">
+    <div id="trackInfo">
+      <div id="track">Not connected</div>
+      <div id="artist"></div>
+    </div>
+  </div>
+</div>
 
-  <script>
-  /********************************************************************
-   * CONFIG - SET YOUR SPOTIFY CLIENT ID AND REDIRECT URI HERE
-   ********************************************************************/
-  const CLIENT_ID = 'REPLACE_WITH_YOUR_SPOTIFY_CLIENT_ID'; // <<-- set your Spotify Client ID
-  const REDIRECT_URI = window.location.origin + window.location.pathname; // Use the same redirect you registered
+<script>
+/**********************************************************
+* CONFIG - INSERT YOUR SPOTIFY CLIENT ID
+***********************************************************/
+const CLIENT_ID = '11d9c0033e1549d5b5a6964978eabf78';
+const REDIRECT_URI = window.location.origin+'/';
+let accessToken=null,refreshToken=null,codeVerifier=null,playerDeviceId=null,currentTrack=null;
+const canvas=document.getElementById('viz');
+const ctx=canvas.getContext('2d');
+let audioCtx=null,analyser=null,sourceNode=null,previewAudio=null;
 
-  /********************************************************************
-   * PKCE Helpers (create code_verifier & code_challenge)
-   ********************************************************************/
-  function generateRandomString(length) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-    let result = '';
-    for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-    return result;
-  }
-  async function sha256(plain) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(plain);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return new Uint8Array(hash);
-  }
-  function base64urlencode(a) {
-    let str = btoa(String.fromCharCode.apply(null, Array.from(a)));
-    return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-  async function generateCodeChallenge(verifier) {
-    const hashed = await sha256(verifier);
-    return base64urlencode(hashed);
-  }
+/**********************************************************
+* CANVAS RESIZE
+***********************************************************/
+function resizeCanvas(){canvas.width=window.innerWidth*devicePixelRatio;canvas.height=window.innerHeight*devicePixelRatio;}
+window.addEventListener('resize',resizeCanvas);resizeCanvas();
 
-  /********************************************************************
-   * STATE
-   ********************************************************************/
-  let accessToken = null;
-  let refreshToken = null;
-  let tokenExpiry = 0;
-  let codeVerifier = null;
-  let playerDeviceId = null;
-  let currentTrack = null;
-  let previewAudio = null; // HTMLAudioElement used for analyzers (if available)
-  let audioCtx = null, analyser = null, sourceNode = null;
-  const vizCanvas = document.getElementById('viz');
-  const ctx = vizCanvas.getContext('2d');
+/**********************************************************
+* PKCE & CONNECT
+***********************************************************/
+function generateRandomString(length){const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';let r='';for(let i=0;i<length;i++)r+=chars.charAt(Math.floor(Math.random()*chars.length));return r;}
+async function sha256(plain){const encoder=new TextEncoder();const data=encoder.encode(plain);const hash=await crypto.subtle.digest('SHA-256',data);return new Uint8Array(hash);}
+function base64urlencode(a){let str=btoa(String.fromCharCode.apply(null,Array.from(a)));return str.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+async function generateCodeChallenge(verifier){const hashed=await sha256(verifier);return base64urlencode(hashed);}
 
-  // gfx resize
-  function resizeCanvas() {
-    vizCanvas.width = vizCanvas.clientWidth * devicePixelRatio;
-    vizCanvas.height = vizCanvas.clientHeight * devicePixelRatio;
-  }
-  window.addEventListener('resize', resizeCanvas);
-  resizeCanvas();
+document.getElementById('connect').addEventListener('click',async()=>{
+  if(!CLIENT_ID || CLIENT_ID.includes('YOUR_SPOTIFY_CLIENT_ID')){alert('Set CLIENT_ID');return;}
+  codeVerifier=generateRandomString(128);
+  const codeChallenge=await generateCodeChallenge(codeVerifier);
+  const state=generateRandomString(12);
+  localStorage.setItem('pkce_code_verifier',codeVerifier);
+  localStorage.setItem('pkce_state',state);
+  const scope='user-read-playback-state user-modify-playback-state user-read-currently-playing streaming';
+  const url='https://accounts.spotify.com/authorize?response_type=code&client_id='+encodeURIComponent(CLIENT_ID)+'&scope='+encodeURIComponent(scope)+'&redirect_uri='+encodeURIComponent(REDIRECT_URI)+'&state='+encodeURIComponent(state)+'&code_challenge_method=S256&code_challenge='+encodeURIComponent(codeChallenge);
+  window.location.href=url;
+});
 
-  /********************************************************************
-   * UI References
-   ********************************************************************/
-  const connectBtn = document.getElementById('connectBtn');
-  const statusMsg = document.getElementById('statusMsg');
-  const albumArt = document.getElementById('albumArt');
-  const trackTitle = document.getElementById('trackTitle');
-  const trackArtist = document.getElementById('trackArtist');
-  const playBtn = document.getElementById('playBtn');
-  const prevBtn = document.getElementById('prevBtn');
-  const nextBtn = document.getElementById('nextBtn');
-  const progressBar = document.getElementById('progressBar');
-  const progressTime = document.getElementById('progressTime');
-  const transferBtn = document.getElementById('transferBtn');
+/**********************************************************
+* HANDLE REDIRECT
+***********************************************************/
+async function handleRedirect(){
+  const params=new URLSearchParams(window.location.search);
+  const code=params.get('code'),state=params.get('state');
+  if(!code) return;
+  const savedState=localStorage.getItem('pkce_state');
+  if(state!==savedState){alert('PKCE mismatch');return;}
+  codeVerifier=localStorage.getItem('pkce_code_verifier');
+  const body=new URLSearchParams({grant_type:'authorization_code',code:code,redirect_uri:REDIRECT_URI,client_id:CLIENT_ID,code_verifier:codeVerifier});
+  const resp=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+  const data=await resp.json();
+  accessToken=data.access_token;
+  refreshToken=data.refresh_token;
+  window.history.replaceState({},document.title,REDIRECT_URI);
+  startPolling();
+}
+handleRedirect();
 
-  /********************************************************************
-   * AUTH FLOW: startAuth() -> Spotify Authorization Code with PKCE
-   ********************************************************************/
-  connectBtn.addEventListener('click', async () => {
-    if (!CLIENT_ID || CLIENT_ID.startsWith('REPLACE')) {
-      alert('Please set your Spotify CLIENT_ID in the top of the file before using Connect.');
-      return;
+/**********************************************************
+* POLLING CURRENT TRACK
+***********************************************************/
+function startPolling(){setInterval(fetchCurrentlyPlaying,2500);}
+async function fetchCurrentlyPlaying(){
+  if(!accessToken) return;
+  const resp=await fetch('https://api.spotify.com/v1/me/player/currently-playing',{headers:{Authorization:'Bearer '+accessToken}});
+  if(!resp.ok) return;
+  const data=await resp.json();
+  if(!data.item) return;
+  updateUI(data);
+}
+
+const albumArt=document.getElementById('albumArt');
+const trackName=document.getElementById('track');
+const artistName=document.getElementById('artist');
+const playBtn=document.getElementById('play');
+const prevBtn=document.getElementById('prev');
+const nextBtn=document.getElementById('next');
+
+function updateUI(data){
+  const item=data.item;
+  trackName.textContent=item.name;
+  artistName.textContent=item.artists.map(a=>a.name).join(', ');
+  albumArt.src=item.album.images[0]?.url||'';
+  if(item.preview_url) initPreview(item.preview_url);
+  else initFallback(item);
+}
+
+/**********************************************************
+* PLAYBACK CONTROLS
+***********************************************************/
+playBtn.addEventListener('click',async()=>{
+  if(!accessToken) return;
+  const cur=await fetch('https://api.spotify.com/v1/me/player',{headers:{Authorization:'Bearer '+accessToken}}).then(r=>r.json());
+  if(cur.is_playing) await fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+accessToken}});
+  else await fetch('https://api.spotify.com/v1/me/player/play',{method:'PUT',headers:{Authorization:'Bearer '+accessToken}});
+});
+prevBtn.addEventListener('click',async()=>{if(!accessToken) return;await fetch('https://api.spotify.com/v1/me/player/previous',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});});
+nextBtn.addEventListener('click',async()=>{if(!accessToken) return;await fetch('https://api.spotify.com/v1/me/player/next',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});});
+
+/**********************************************************
+* VISUALIZER
+***********************************************************/
+function initPreview(url){
+  stopAudio();
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  previewAudio=new Audio(url); previewAudio.crossOrigin="anonymous"; previewAudio.loop=true; previewAudio.play().catch(()=>{});
+  sourceNode=audioCtx.createMediaElementSource(previewAudio);
+  analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
+  sourceNode.connect(analyser); analyser.connect(audioCtx.destination);
+  drawViz();
+}
+function stopAudio(){if(previewAudio){previewAudio.pause();previewAudio.src='';} if(sourceNode){sourceNode.disconnect();} if(analyser){analyser.disconnect();}}
+function drawViz(){
+  if(!analyser) return;
+  const bufferLength=analyser.frequencyBinCount;
+  const dataArray=new Uint8Array(bufferLength);
+  function frame(){
+    analyser.getByteFrequencyData(dataArray);
+    const avg=dataArray.slice(0,bufferLength*0.3).reduce((a,b)=>a+b,0)/(bufferLength*0.3)/255;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const bars=64;
+    const w=canvas.width/bars;
+    for(let i=0;i<bars;i++){
+      const h=(avg+Math.random()*0.15)*canvas.height*0.6*(1-Math.abs(i-bars/2)/(bars/2));
+      ctx.fillStyle=`rgba(0,224,255,0.8)`; ctx.fillRect(i*w,canvas.height-h,w*0.6,h);
     }
-    await startAuth();
-  });
-
-  async function startAuth() {
-    codeVerifier = generateRandomString(128);
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateRandomString(12);
-    localStorage.setItem('pkce_code_verifier', codeVerifier);
-    localStorage.setItem('pkce_state', state);
-
-    const scope = [
-      'user-read-playback-state',
-      'user-modify-playback-state',
-      'user-read-currently-playing',
-      'streaming',
-      'user-read-email',
-      'user-read-private'
-    ].join(' ');
-
-    const authUrl =
-      'https://accounts.spotify.com/authorize' +
-      '?response_type=code' +
-      '&client_id=' + encodeURIComponent(CLIENT_ID) +
-      '&scope=' + encodeURIComponent(scope) +
-      '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
-      '&state=' + encodeURIComponent(state) +
-      '&code_challenge_method=S256' +
-      '&code_challenge=' + encodeURIComponent(codeChallenge);
-
-    // redirect the user to Spotify for auth
-    window.location.href = authUrl;
+    requestAnimationFrame(frame);
   }
+  frame();
+}
+function initFallback(item){stopAudio(); drawViz(); /* pulsating bars fallback */}
+</script>
 
-  /********************************************************************
-   * CHECK FOR CODE IN URL (after redirect) -> exchange for tokens
-   ********************************************************************/
-  async function handleRedirect() {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state');
-    if (!code) return; // not a redirect
-    const savedState = localStorage.getItem('pkce_state');
-    if (state !== savedState) {
-      statusMsg.textContent = 'PKCE state mismatch. Aborting.';
-      return;
-    }
-    // exchange code for tokens
-    codeVerifier = localStorage.getItem('pkce_code_verifier');
-    try {
-      statusMsg.textContent = 'Exchanging code for token...';
-      const body = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: REDIRECT_URI,
-        client_id: CLIENT_ID,
-        code_verifier: codeVerifier
-      });
-      const resp = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: body.toString()
-      });
-      const data = await resp.json();
-      if (data.error) throw data;
-      accessToken = data.access_token;
-      refreshToken = data.refresh_token;
-      tokenExpiry = Date.now() + (data.expires_in * 1000);
-      // clear query params
-      window.history.replaceState({}, document.title, REDIRECT_URI);
-      statusMsg.textContent = 'Connected to Spotify';
-      connectBtn.textContent = 'Connected';
-      // start polling
-      startPolling();
-      // attempt to initialize Web Playback SDK if desired
-      loadSpotifyPlayer();
-    } catch (err) {
-      console.error('Token exchange failed', err);
-      statusMsg.textContent = 'Token exchange failed. See console.';
-    }
-  }
-  await handleRedirect();
-
-  /********************************************************************
-   * TOKEN REFRESH
-   ********************************************************************/
-  async function refreshAccessToken() {
-    if (!refreshToken) return;
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: CLIENT_ID
-    });
-    const resp = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: body.toString()
-    });
-    const data = await resp.json();
-    if (data.access_token) {
-      accessToken = data.access_token;
-      tokenExpiry = Date.now() + (data.expires_in * 1000);
-      console.log('refreshed token');
-    }
-  }
-
-  /********************************************************************
-   * POLLING: periodically fetch currently playing track
-   ********************************************************************/
-  let pollInterval = null;
-  function startPolling() {
-    if (pollInterval) clearInterval(pollInterval);
-    fetchCurrentlyPlaying();
-    pollInterval = setInterval(async () => {
-      if (!accessToken) return;
-      if (Date.now() > tokenExpiry - 60000) await refreshAccessToken();
-      fetchCurrentlyPlaying();
-    }, 2500);
-  }
-
-  async function fetchCurrentlyPlaying() {
-    if (!accessToken) return;
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-        headers: { Authorization: 'Bearer ' + accessToken }
-      });
-      if (resp.status === 204) {
-        // nothing playing
-        statusMsg.textContent = 'No track playing';
-        return;
-      }
-      if (resp.status === 401) {
-        await refreshAccessToken();
-        return;
-      }
-      const data = await resp.json();
-      if (!data || !data.item) return;
-      updateNowPlaying(data);
-    } catch (err) {
-      console.error('error fetching currently playing', err);
-      statusMsg.textContent = 'Error fetching track';
-    }
-  }
-
-  /********************************************************************
-   * UPDATE UI & VISUALIZER TRIGGER
-   ********************************************************************/
-  async function updateNowPlaying(data) {
-    // track object
-    const item = data.item;
-    const isPlaying = data.is_playing;
-    currentTrack = item;
-
-    const title = item.name;
-    const artist = item.artists.map(a => a.name).join(', ');
-    const art = item.album && item.album.images && item.album.images[0] ? item.album.images[0].url : '';
-
-    trackTitle.textContent = title;
-    trackArtist.textContent = artist;
-    albumArt.src = art || '';
-
-    // set progress (animated)
-    const pos = data.progress_ms || 0;
-    const dur = item.duration_ms || 0;
-    const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
-    progressBar.style.width = pct + '%';
-    progressTime.textContent = formatMS(pos) + ' / ' + formatMS(dur);
-
-    // set play/pause icon
-    playBtn.textContent = isPlaying ? '⏸' : '▶';
-
-    statusMsg.textContent = (isPlaying ? 'Playing' : 'Paused') + ' • ' + artist;
-
-    // attempt to use preview_url for the visualizer
-    const preview = item.preview_url;
-    if (preview) {
-      initPreviewVisualizer(preview);
-    } else {
-      // fallback: use audio-features (energy)
-      const features = await fetchAudioFeatures(item.id);
-      initEnergyFallback(features, pos, dur);
-    }
-  }
-
-  function formatMS(ms) {
-    if (!ms) return '00:00';
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
-  }
-
-  /********************************************************************
-   * FETCH AUDIO FEATURES (energy, tempo)
-   ********************************************************************/
-  async function fetchAudioFeatures(trackId) {
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/audio-features/' + trackId, {
-        headers: { Authorization: 'Bearer ' + accessToken }
-      });
-      if (resp.ok) return await resp.json();
-      return null;
-    } catch (err) {
-      console.error('audio features error', err);
-      return null;
-    }
-  }
-
-  /********************************************************************
-   * PREVIEW AUDIO VISUALIZER (WebAudio analyser)
-   ********************************************************************/
-  async function initPreviewVisualizer(previewUrl) {
-    stopPreviewAudio();
-    // create audio context if needed
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    previewAudio = new Audio(previewUrl);
-    previewAudio.crossOrigin = "anonymous";
-    previewAudio.loop = true;
-    try {
-      await previewAudio.play().catch(()=>{}); // may require user gesture
-    } catch(e){}
-    // connect analyser
-    try {
-      sourceNode = audioCtx.createMediaElementSource(previewAudio);
-    } catch(e) {
-      // Safari may restrict createMediaElementSource if autoplay blocked
-      console.warn('Could not create source node', e);
-      sourceNode = null;
-    }
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    if (sourceNode) {
-      sourceNode.connect(analyser);
-      analyser.connect(audioCtx.destination);
-    } else {
-      // fallback: use destination as input (rare)
-    }
-    startVizWithAnalyser();
-  }
-
-  function stopPreviewAudio() {
-    if (previewAudio) {
-      try { previewAudio.pause(); previewAudio.src = ''; } catch(e){}
-      previewAudio = null;
-    }
-    if (sourceNode) { try { sourceNode.disconnect(); } catch(e){} sourceNode = null; }
-    if (analyser) { analyser.disconnect(); analyser = null; }
-  }
-
-  /********************************************************************
-   * ENERGY FALLBACK VISUALIZER
-   * Use the track's 'energy' feature (0..1) and tempo to drive bars.
-   ********************************************************************/
-  let fallbackAnimation = null;
-  function initEnergyFallback(features, pos, dur) {
-    stopPreviewAudio();
-    if (fallbackAnimation) cancelAnimationFrame(fallbackAnimation);
-    const energy = features && features.energy ? features.energy : 0.5;
-    const tempo = features && features.tempo ? features.tempo : 90;
-    // create a simple pulsing pattern using tempo & energy
-    const base = Math.max(0.12, energy);
-    const speed = Math.max(0.6, 140 / tempo); // inversely related
-    let t0 = performance.now();
-    function frame(now) {
-      const t = (now - t0) / 1000;
-      // compute an r value using sin wave + jitter
-      const r = Math.abs(Math.sin(t * Math.PI * speed)) * (base * 1.2) + (Math.random() * 0.06);
-      // draw bars using r
-      drawBarsFromValue(r);
-      fallbackAnimation = requestAnimationFrame(frame);
-    }
-    fallbackAnimation = requestAnimationFrame(frame);
-  }
-
-  /********************************************************************
-   * VISUALIZER DRAWING
-   ********************************************************************/
-  let vizAnim = null;
-  function startVizWithAnalyser() {
-    if (!analyser) return;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    function draw() {
-      analyser.getByteFrequencyData(dataArray);
-      // compute energy in lower-mid bands
-      let sum = 0;
-      let count = 0;
-      // use first N bins (bass/mid)
-      const N = Math.floor(bufferLength * 0.35);
-      for (let i = 0; i < N; i++) { sum += dataArray[i]; count++; }
-      const avg = count ? (sum / count) / 255 : 0;
-      // map to 0..1
-      drawBarsFromValue(avg);
-      vizAnim = requestAnimationFrame(draw);
-    }
-    if (vizAnim) cancelAnimationFrame(vizAnim);
-    draw();
-  }
-
-  function drawBarsFromValue(value) {
-    const dpr = devicePixelRatio || 1;
-    const w = vizCanvas.width;
-    const h = vizCanvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    // parameters
-    const bars = 24;
-    const gap = Math.round((w / dpr) * 0.015);
-    const totalGap = gap * (bars - 1);
-    const bw = ((w) - totalGap) / bars; // bar width in device pixels already accounted
-    // draw bars
-    for (let i = 0; i < bars; i++) {
-      // create a pulsating height based on value, randomness and position
-      const posFactor = 1 - Math.abs((i - bars/2) / (bars/2));
-      const base = value * (0.3 + posFactor * 0.9);
-      const jitter = Math.random() * 0.08;
-      const height = Math.max(0.03, Math.min(1, base + jitter));
-      const barH = Math.round(h * height);
-      const x = i * (bw + gap);
-      // gradient
-      const grad = ctx.createLinearGradient(x, 0, x, h);
-      grad.addColorStop(0, 'rgba(124,92,255,0.95)');
-      grad.addColorStop(0.5, 'rgba(0,224,255,0.9)');
-      grad.addColorStop(1, 'rgba(12,14,20,0.18)');
-      ctx.fillStyle = grad;
-      // rounded rectangle fill
-      const y = h - barH;
-      roundRect(ctx, x + 2, y + 4, bw - 4, barH - 6, 4 * (devicePixelRatio || 1), true, false);
-      // glow
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = 'rgba(0,224,255,0.18)';
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-  }
-
-  // helper: draw rounded rect
-  function roundRect(ctx, x, y, w, h, r, fill, stroke) {
-    if (r < 0) r = 0;
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-    if (fill) ctx.fill();
-    if (stroke) ctx.stroke();
-  }
-
-  /********************************************************************
-   * SPOTIFY WEB API CONTROLS (play/pause/next/prev)
-   ********************************************************************/
-  playBtn.addEventListener('click', async () => {
-    if (!accessToken) { alert('Connect to Spotify first'); return; }
-    // toggle play/pause by fetching current playback & calling play/pause accordingly
-    const cur = await fetch('https://api.spotify.com/v1/me/player', { headers: { Authorization: 'Bearer ' + accessToken } }).then(r=>r.json()).catch(()=>null);
-    if (!cur) {
-      statusMsg.textContent = 'No active device found — open Spotify or transfer to Web Playback.';
-      return;
-    }
-    const is_playing = cur.is_playing;
-    if (is_playing) {
-      await fetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT', headers:{ Authorization: 'Bearer ' + accessToken }});
-    } else {
-      await fetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT', headers:{ Authorization: 'Bearer ' + accessToken }});
-    }
-  });
-
-  prevBtn.addEventListener('click', async () => {
-    if (!accessToken) return;
-    await fetch('https://api.spotify.com/v1/me/player/previous', { method: 'POST', headers:{ Authorization: 'Bearer ' + accessToken }});
-  });
-
-  nextBtn.addEventListener('click', async () => {
-    if (!accessToken) return;
-    await fetch('https://api.spotify.com/v1/me/player/next', { method: 'POST', headers:{ Authorization: 'Bearer ' + accessToken }});
-  });
-
-  /********************************************************************
-   * SPOTIFY WEB PLAYBACK SDK (optional): load to create a browser device
-   * This helps if user wants to transfer playback to the browser.
-   ********************************************************************/
-  let playerReady = false;
-  async function loadSpotifyPlayer() {
-    if (!accessToken) return;
-    // add SDK script
-    if (!window.Spotify) {
-      const s = document.createElement('script');
-      s.src = "https://sdk.scdn.co/spotify-player.js";
-      document.head.appendChild(s);
-    }
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      const player = new Spotify.Player({
-        name: 'Nova Energy Player',
-        getOAuthToken: cb => { cb(accessToken); },
-        volume: 0.6
-      });
-      window.spotifyPlayer = player;
-
-      player.addListener('ready', ({ device_id }) => {
-        playerDeviceId = device_id;
-        statusMsg.textContent = 'Web Playback ready — device ID: ' + device_id;
-        playerReady = true;
-      });
-
-      player.addListener('not_ready', ({ device_id }) => {
-        statusMsg.textContent = 'Device gone: ' + device_id;
-      });
-
-      player.addListener('player_state_changed', (state) => {
-        // when the SDK plays, we still read currently-playing from Web API
-        if (state) fetchCurrentlyPlaying();
-      });
-
-      player.connect();
-    };
-  }
-
-  transferBtn.addEventListener('click', async () => {
-    if (!accessToken) { alert('Connect first'); return; }
-    // If playerReady and deviceId present, transfer playback to this device
-    if (!playerDeviceId) {
-      statusMsg.textContent = 'Starting web player... allow playback when prompted.';
-      await loadSpotifyPlayer();
-      // wait a short bit
-      setTimeout(async ()=>{
-        if (playerDeviceId) {
-          await transferPlayback(playerDeviceId);
-          statusMsg.textContent = 'Transferred playback to Nova Energy player.';
-        } else {
-          statusMsg.textContent = 'Web player not ready yet. Try again in a moment.';
-        }
-      }, 2000);
-    } else {
-      await transferPlayback(playerDeviceId);
-      statusMsg.textContent = 'Transferred playback to Nova Energy player.';
-    }
-  });
-
-  async function transferPlayback(deviceId) {
-    try {
-      await fetch('https://api.spotify.com/v1/me/player', {
-        method: 'PUT',
-        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_ids: [deviceId], play: true })
-      });
-    } catch (e) { console.error('transfer error', e); }
-  }
-
-  /********************************************************************
-   * UTILITY: handle cursor glow
-   ********************************************************************/
-  const cursor = document.getElementById('cursorGlow');
-  window.addEventListener('mousemove', e => {
-    cursor.style.left = e.clientX + 'px';
-    cursor.style.top = e.clientY + 'px';
-  });
-
-  /********************************************************************
-   * ON LOAD: if already have code in URL we handled above; try to poll
-   ********************************************************************/
-  // Start basic UI update loop (progress update)
-  setInterval(async () => {
-    try {
-      if (!accessToken) return;
-      // update progress display in-between full fetches
-      // fetch current player state for precise progress frequently
-      const resp = await fetch('https://api.spotify.com/v1/me/player', { headers: { Authorization: 'Bearer ' + accessToken }});
-      if (!resp.ok) return;
-      const data = await resp.json();
-      if (data && data.item) {
-        // same update logic as fetchCurrentlyPlaying but without reinitializing viz
-        const pos = data.progress_ms || 0;
-        const dur = data.item.duration_ms || 0;
-        const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
-        progressBar.style.width = pct + '%';
-        progressTime.textContent = formatMS(pos) + ' / ' + formatMS(dur);
-        playBtn.textContent = data.is_playing ? '⏸' : '▶';
-      }
-    } catch(e){}
-  }, 1000);
-
-  // run any initialization if we already have an accessToken from prior session (optional)
-  // not persisted here for simplicity — tokens stored in memory
-  </script>
 </body>
 </html>
