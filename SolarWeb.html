@@ -3,35 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nova Energy - Spotify Neon Visualizer</title>
+<title>Solar Web - Spotify Neon Visualizer</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  /* RESET & BASIC STYLES */
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:100%;height:100%;font-family:'Inter',sans-serif;background:#04060f;color:#fff;overflow:hidden}
-  button{cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-weight:600;margin:4px;transition:all 0.2s}
-  button:hover{transform:translateY(-2px)}
+/* Reset */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;font-family:'Inter',sans-serif;background:#04060f;overflow:hidden;color:#fff}
 
-  /* FULL SCREEN VISUALIZER CANVAS */
-  #viz{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
+/* Canvas for visualizer & particles */
+#viz{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
 
-  /* UI LAYER */
-  #ui{position:absolute;z-index:10;top:20px;left:20px;width:350px;background:rgba(255,255,255,0.02);backdrop-filter:blur(12px);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.04)}
-  #ui h1{font-weight:800;font-size:24px;background:linear-gradient(90deg,#00e0ff,#7c5cff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px}
-  #connect{background:linear-gradient(90deg,#00e0ff,#7c5cff);color:#041018;width:100%}
-  #play,#prev,#next{background:rgba(255,255,255,0.08)}
-  #nowPlaying{margin-top:12px;display:flex;gap:12px;align-items:center}
-  #nowPlaying img{width:96px;height:96px;border-radius:12px;object-fit:cover}
-  #trackInfo{flex:1}
-  #track,#artist{margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* UI Layer */
+#ui{position:absolute;z-index:10;top:20px;left:20px;width:350px;background:rgba(255,255,255,0.02);backdrop-filter:blur(12px);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.04)}
+#ui h1{font-weight:800;font-size:26px;background:linear-gradient(90deg,#00e0ff,#7c5cff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;text-align:center;}
+#connect{background:linear-gradient(90deg,#00e0ff,#7c5cff);color:#041018;width:100%;margin-bottom:10px;}
+button{cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-weight:600;margin:4px;transition:all 0.2s;}
+button:hover{transform:translateY(-2px);}
+#controls{display:flex;justify-content:center;gap:12px;margin-bottom:12px;}
+#nowPlaying{display:flex;gap:12px;align-items:center;margin-top:12px;}
+#nowPlaying img{width:96px;height:96px;border-radius:12px;object-fit:cover}
+#trackInfo{flex:1;overflow:hidden}
+#track,#artist{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:400px){
+  #ui{width:90%;top:10px;left:50%;transform:translateX(-50%)}
+  #nowPlaying img{width:72px;height:72px}
+}
 
-  /* NEON PARTICLES */
-  .particle{position:absolute;border-radius:50%;pointer-events:none}
-
-  @media(max-width:400px){
-    #ui{width:90%;top:10px;left:50%;transform:translateX(-50%)}
-    #nowPlaying img{width:72px;height:72px}
-  }
+/* Neon accent lines (will be drawn in canvas) */
 </style>
 </head>
 <body>
@@ -39,9 +37,9 @@
 <canvas id="viz"></canvas>
 
 <div id="ui">
-  <h1>Nova Energy</h1>
+  <h1>Solar Web</h1>
   <button id="connect">Connect Spotify</button>
-  <div style="margin-top:10px;">
+  <div id="controls">
     <button id="prev">⟲</button>
     <button id="play">▶</button>
     <button id="next">⟲→</button>
@@ -61,25 +59,25 @@
 ***********************************************************/
 const CLIENT_ID = '11d9c0033e1549d5b5a6964978eabf78';
 const REDIRECT_URI = window.location.origin+'/';
-let accessToken=null,refreshToken=null,codeVerifier=null,playerDeviceId=null,currentTrack=null;
+let accessToken=null,refreshToken=null,codeVerifier=null;
 const canvas=document.getElementById('viz');
 const ctx=canvas.getContext('2d');
 let audioCtx=null,analyser=null,sourceNode=null,previewAudio=null;
+let particles=[],maxParticles=120,beatFactor=0,colorGradient='#00e0ff';
 
 /**********************************************************
-* CANVAS RESIZE
+* Canvas resize
 ***********************************************************/
 function resizeCanvas(){canvas.width=window.innerWidth*devicePixelRatio;canvas.height=window.innerHeight*devicePixelRatio;}
 window.addEventListener('resize',resizeCanvas);resizeCanvas();
 
 /**********************************************************
-* PKCE & CONNECT
+* PKCE Spotify login
 ***********************************************************/
 function generateRandomString(length){const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';let r='';for(let i=0;i<length;i++)r+=chars.charAt(Math.floor(Math.random()*chars.length));return r;}
 async function sha256(plain){const encoder=new TextEncoder();const data=encoder.encode(plain);const hash=await crypto.subtle.digest('SHA-256',data);return new Uint8Array(hash);}
 function base64urlencode(a){let str=btoa(String.fromCharCode.apply(null,Array.from(a)));return str.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 async function generateCodeChallenge(verifier){const hashed=await sha256(verifier);return base64urlencode(hashed);}
-
 document.getElementById('connect').addEventListener('click',async()=>{
   if(!CLIENT_ID || CLIENT_ID.includes('YOUR_SPOTIFY_CLIENT_ID')){alert('Set CLIENT_ID');return;}
   codeVerifier=generateRandomString(128);
@@ -93,7 +91,7 @@ document.getElementById('connect').addEventListener('click',async()=>{
 });
 
 /**********************************************************
-* HANDLE REDIRECT
+* Handle redirect
 ***********************************************************/
 async function handleRedirect(){
   const params=new URLSearchParams(window.location.search);
@@ -113,8 +111,15 @@ async function handleRedirect(){
 handleRedirect();
 
 /**********************************************************
-* POLLING CURRENT TRACK
+* Poll current track
 ***********************************************************/
+const albumArt=document.getElementById('albumArt');
+const trackName=document.getElementById('track');
+const artistName=document.getElementById('artist');
+const playBtn=document.getElementById('play');
+const prevBtn=document.getElementById('prev');
+const nextBtn=document.getElementById('next');
+
 function startPolling(){setInterval(fetchCurrentlyPlaying,2500);}
 async function fetchCurrentlyPlaying(){
   if(!accessToken) return;
@@ -125,24 +130,19 @@ async function fetchCurrentlyPlaying(){
   updateUI(data);
 }
 
-const albumArt=document.getElementById('albumArt');
-const trackName=document.getElementById('track');
-const artistName=document.getElementById('artist');
-const playBtn=document.getElementById('play');
-const prevBtn=document.getElementById('prev');
-const nextBtn=document.getElementById('next');
-
 function updateUI(data){
   const item=data.item;
   trackName.textContent=item.name;
   artistName.textContent=item.artists.map(a=>a.name).join(', ');
   albumArt.src=item.album.images[0]?.url||'';
+  // set dynamic color gradient
+  colorGradient=item.album.images[0]?`url(${item.album.images[0].url})`:'#00e0ff';
   if(item.preview_url) initPreview(item.preview_url);
   else initFallback(item);
 }
 
 /**********************************************************
-* PLAYBACK CONTROLS
+* Playback controls
 ***********************************************************/
 playBtn.addEventListener('click',async()=>{
   if(!accessToken) return;
@@ -154,7 +154,7 @@ prevBtn.addEventListener('click',async()=>{if(!accessToken) return;await fetch('
 nextBtn.addEventListener('click',async()=>{if(!accessToken) return;await fetch('https://api.spotify.com/v1/me/player/next',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});});
 
 /**********************************************************
-* VISUALIZER
+* Visualizer with particles, neon bars & beat detection
 ***********************************************************/
 function initPreview(url){
   stopAudio();
@@ -163,28 +163,65 @@ function initPreview(url){
   sourceNode=audioCtx.createMediaElementSource(previewAudio);
   analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
   sourceNode.connect(analyser); analyser.connect(audioCtx.destination);
+  initParticles();
   drawViz();
 }
+
 function stopAudio(){if(previewAudio){previewAudio.pause();previewAudio.src='';} if(sourceNode){sourceNode.disconnect();} if(analyser){analyser.disconnect();}}
+function initFallback(){stopAudio(); initParticles(); drawViz();}
+
+function initParticles(){
+  particles=[];
+  for(let i=0;i<maxParticles;i++){
+    particles.push({
+      x:Math.random()*canvas.width,
+      y:Math.random()*canvas.height,
+      vx:(Math.random()-0.5)*1.2,
+      vy:(Math.random()-0.5)*1.2,
+      size:Math.random()*3+1
+    });
+  }
+}
+
 function drawViz(){
-  if(!analyser) return;
+  if(!analyser) analyser={getByteFrequencyData:()=>{}};
   const bufferLength=analyser.frequencyBinCount;
   const dataArray=new Uint8Array(bufferLength);
+
   function frame(){
     analyser.getByteFrequencyData(dataArray);
-    const avg=dataArray.slice(0,bufferLength*0.3).reduce((a,b)=>a+b,0)/(bufferLength*0.3)/255;
+    const avg=dataArray.reduce((a,b)=>a+b,0)/bufferLength/255;
     ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Background glow based on album color
+    ctx.fillStyle='rgba(0,4,24,0.2)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Neon bars pulsing to beat
     const bars=64;
     const w=canvas.width/bars;
     for(let i=0;i<bars;i++){
       const h=(avg+Math.random()*0.15)*canvas.height*0.6*(1-Math.abs(i-bars/2)/(bars/2));
-      ctx.fillStyle=`rgba(0,224,255,0.8)`; ctx.fillRect(i*w,canvas.height-h,w*0.6,h);
+      ctx.fillStyle=`rgba(0,224,255,0.8)`;
+      ctx.fillRect(i*w,canvas.height-h,w*0.6,h);
     }
+
+    // Update and draw particles
+    particles.forEach(p=>{
+      p.x+=p.vx*(avg*8+1);
+      p.y+=p.vy*(avg*8+1);
+      if(p.x>canvas.width)p.x=0; if(p.x<0)p.x=canvas.width;
+      if(p.y>canvas.height)p.y=0; if(p.y<0)p.y=canvas.height;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size*(avg*3+1),0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,224,255,0.6)`;
+      ctx.fill();
+    });
+
     requestAnimationFrame(frame);
   }
   frame();
 }
-function initFallback(item){stopAudio(); drawViz(); /* pulsating bars fallback */}
 </script>
 
 </body>
