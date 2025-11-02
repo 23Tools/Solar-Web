@@ -28,8 +28,6 @@ button:hover{transform:translateY(-2px);}
   #ui{width:90%;top:10px;left:50%;transform:translateX(-50%)}
   #nowPlaying img{width:72px;height:72px}
 }
-
-/* Neon accent lines (will be drawn in canvas) */
 </style>
 </head>
 <body>
@@ -135,8 +133,7 @@ function updateUI(data){
   trackName.textContent=item.name;
   artistName.textContent=item.artists.map(a=>a.name).join(', ');
   albumArt.src=item.album.images[0]?.url||'';
-  // set dynamic color gradient
-  colorGradient=item.album.images[0]?`url(${item.album.images[0].url})`:'#00e0ff';
+  colorGradient=item.album.images[0]?.url||'#00e0ff';
   if(item.preview_url) initPreview(item.preview_url);
   else initFallback(item);
 }
@@ -154,7 +151,18 @@ prevBtn.addEventListener('click',async()=>{if(!accessToken) return;await fetch('
 nextBtn.addEventListener('click',async()=>{if(!accessToken) return;await fetch('https://api.spotify.com/v1/me/player/next',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});});
 
 /**********************************************************
-* Visualizer with particles, neon bars & beat detection
+* Swipe controls for mobile
+***********************************************************/
+let touchStartX=0;
+document.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX});
+document.addEventListener('touchend',e=>{
+  let deltaX=e.changedTouches[0].clientX-touchStartX;
+  if(deltaX>50){ prevBtn.click(); }
+  if(deltaX<-50){ nextBtn.click(); }
+});
+
+/**********************************************************
+* Visualizer with particles, neon bars & gradient background
 ***********************************************************/
 function initPreview(url){
   stopAudio();
@@ -193,11 +201,14 @@ function drawViz(){
     const avg=dataArray.reduce((a,b)=>a+b,0)/bufferLength/255;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // Background glow based on album color
-    ctx.fillStyle='rgba(0,4,24,0.2)';
+    // Smooth dynamic gradient background
+    const gradient=ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+    gradient.addColorStop(0,'rgba(0,50,100,0.3)');
+    gradient.addColorStop(1,'rgba(0,224,255,0.3)');
+    ctx.fillStyle=gradient;
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // Neon bars pulsing to beat
+    // Neon bars pulsing
     const bars=64;
     const w=canvas.width/bars;
     for(let i=0;i<bars;i++){
@@ -206,7 +217,7 @@ function drawViz(){
       ctx.fillRect(i*w,canvas.height-h,w*0.6,h);
     }
 
-    // Update and draw particles
+    // Particles
     particles.forEach(p=>{
       p.x+=p.vx*(avg*8+1);
       p.y+=p.vy*(avg*8+1);
